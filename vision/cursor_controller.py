@@ -1,10 +1,9 @@
-
 """Kalibre edilmis lazer koordinatlarini fare imlecine aktarir."""
 
 from typing import Optional, Tuple
-
 import pyautogui
 
+from utils.smoothing import PointSmoother
 from vision.calibration import HomographyCalibrator
 
 Point = Tuple[float, float]
@@ -14,46 +13,35 @@ class CursorController:
     def __init__(
         self,
         calibrator: HomographyCalibrator,
-        smoothing: float = 0.5,
+        freq: float = 60.0,
+        min_cutoff: float = 1.0,
+        beta: float = 0.02,
     ):
         self.calibrator = calibrator
-        self.smoothing = max(0.01, min(smoothing, 1.0))
-
-        self.last_x: Optional[float] = None
-        self.last_y: Optional[float] = None
+        # Gelişmiş One Euro Filter yumuşatıcısını bağladık
+        self.smoother = PointSmoother(freq=freq, min_cutoff=min_cutoff, beta=beta)
 
         pyautogui.PAUSE = 0
         pyautogui.FAILSAFE = True
 
     def move_from_camera(self, point: Point) -> None:
-        """Kamera koordinatini kalibrasyonla ekrana aktarir."""
-
+        """Kamera koordinatini kalibrasyonla ekrana aktarir ve imleci hareket ettirir."""
         if not self.calibrator.is_calibrated:
             return
 
-        # Homografi: kamera koordinati -> ekran koordinati
-        target_x, target_y = self.calibrator.transform(point)
+        # 1. Homografi ile ekrana dönüştür (clamp=True ile ekran dışına taşmayı engelliyoruz)
+        screen_x, screen_y = self.calibrator.transform(point, clamp=True)
 
-        # Ilk tespitte dogrudan hedefe git
-        if self.last_x is None or self.last_y is None:
-            self.last_x = target_x
-            self.last_y = target_y
-        else:
-            # Imlec hareketini yumusat
-            self.last_x += self.smoothing * (
-                target_x - self.last_x
-            )
-            self.last_y += self.smoothing * (
-                target_y - self.last_y
-            )
+        # 2. One Euro Filter ile titremeyi önle
+        smooth_x, smooth_y = self.smoother.update((screen_x, screen_y))
 
+        # 3. İmleci hareket ettir
         pyautogui.moveTo(
-            round(self.last_x),
-            round(self.last_y),
+            round(smooth_x),
+            round(smooth_y),
             duration=0,
         )
 
     def reset(self) -> None:
-        """Hareket yumusatma gecmisini sifirlar."""
-        self.last_x = None
-        self.last_y = None
+        """Lazer kayboldugunda veya yeniden algilandiginda yumusatma gecmisini sifirlar."""
+        self.smoother.reset()

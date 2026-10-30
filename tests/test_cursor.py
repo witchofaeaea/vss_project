@@ -1,11 +1,14 @@
-
 import time
-
+import numpy as np
+from vision.calibration import HomographyCalibrator
 from vision.cursor_controller import CursorController
 
-cursor = CursorController(smoothing=0.5)
+# Sahte bir kalibratör oluşturup homografi matrisini birim matris (identity) yapıyoruz
+calibrator = HomographyCalibrator((1920, 1080))
+calibrator.H = np.eye(3, dtype=np.float64)
 
-# Örnek kamera çözünürlüğü: 640 x 480
+cursor = CursorController(calibrator)
+
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 
@@ -13,16 +16,11 @@ try:
     print("Test başladı. Çıkmak için Ctrl+C.")
 
     while True:
-        # Örnek hareket: noktayı sağa doğru kaydır
-        x = int((time.time() * 100) % FRAME_WIDTH)
-        y = FRAME_HEIGHT // 2
+        x = float((time.time() * 100) % FRAME_WIDTH)
+        y = float(FRAME_HEIGHT // 2)
 
-        cursor.move_from_camera(
-            x,
-            y,
-            FRAME_WIDTH,
-            FRAME_HEIGHT
-        )
+        # Tek bir Tuple (x, y) gönderiyoruz
+        cursor.move_from_camera((x, y))
 
         time.sleep(0.01)
 
