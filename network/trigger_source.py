@@ -1,3 +1,18 @@
+"""Tetik kaynakları: ESP32'den gelen atış olaylarını tek bir arayüzle alır.
+
+Kaynak ne olursa olsun (UDP, serial, manual) ana program aynı TriggerEvent'i alır.
+
+ESP32 -> Pi mesaj formatı (tek satır / tek UDP paketi, ASCII):
+    SHOT,<shot_id>,<esp_millis>
+    shot_id    : ESP'nin her atışta bir artırdığı sayaç
+    esp_millis : Tetiğe basıldığı andaki millis() değeri
+
+    Örnek: SHOT,42,1234567
+    UDP port: 5005
+
+Paket kaybına karşı ESP aynı atışı aynı shot_id ile 2-3 kez gönderebilir;
+Pi tarafında tekrar eden shot_id yok sayılır.
+Eski "TRIGGER" / "FIRE" / "BTN_TRIGGER" mesajları da kabul edilir (id'siz)."""
 import socket
 import threading
 import time

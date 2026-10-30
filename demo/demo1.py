@@ -15,7 +15,7 @@ from vision.cursor_controller import CursorController
 from vision.hsv_filter import create_red_laser_mask
 
 # Kamera: "picamera" (Raspberry Pi CSI kamera), 0 (USB webcam) veya stream URL / video dosyası
-CAMERA_SOURCE = "0"
+CAMERA_SOURCE = "0" # TODO: pi kamerasına geçince picamera yapılacak
 CAMERA_SIZE = (1280, 720)
 CAMERA_FPS = 120
 EXPOSURE_US = None  # düşük pozlama lazer tespitini kolaylaştırır (sadece Pi kamerasi)
@@ -55,7 +55,7 @@ def main():
     coordinate_lock = threading.Lock()
 
     def handle_trigger(event: TriggerEvent):
-        # Lazerin sürekli açık olduğunu varsayar BAKILACAK
+        # TODO: Lazerin sürekli açık olduğunu varsayar, lazer modu netleşince güncelle
         with coordinate_lock:
             candidates = [item for item in coordinate_history if item[0] <= event.t_recv]
 
