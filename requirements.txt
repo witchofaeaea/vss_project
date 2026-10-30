@@ -3,3 +3,4 @@ numpy>=1.24.0
 pytest>=7.4.0
 pyautogui>=0.9.54
 pyserial>=3.5
+# Raspberry Pi kamerasi icin: sudo apt install python3-picamera2 (pip ile kurulmaz)

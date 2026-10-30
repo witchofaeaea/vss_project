@@ -1,31 +1,45 @@
+import sys
 import threading
-import time
 from collections import deque
 from pathlib import Path
 
 import cv2
 
-from network.trigger_controller import TriggerController
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # proje koku
+
+from network.trigger_source import TriggerEvent, make_trigger_source
 from vision.blob_detector import extract_laser_centroid
 from vision.calibration import HomographyCalibrator
+from vision.camera import open_camera
 from vision.cursor_controller import CursorController
 from vision.hsv_filter import create_red_laser_mask
 
-# ESP32-CAM stream adresi veya yerel kamera indeksi (0)
-CAMERA_URL = "http://192.168.1.100:81/stream"
+# Kamera: "picamera" (Raspberry Pi CSI kamera), 0 (USB webcam) veya stream URL / video dosyasi
+CAMERA_SOURCE = "0"
+CAMERA_SIZE = (1280, 720)
+CAMERA_FPS = 120
+EXPOSURE_US = None  # Orn. 2000: dusuk pozlama lazer tespitini kolaylastirir (sadece Pi kamerasi)
 
-# Ekran cozunurlugu
+# Tetik kaynagi: "manual" (SPACE tusu), "udp" (ESP32 Wi-Fi), "serial" (ESP32 USB kablo)
+TRIGGER_KIND = "manual"
+TRIGGER_OPTIONS = {
+    "udp": {"port": 5005},
+    "serial": {"port": "COM3" if sys.platform.startswith("win") else "/dev/ttyUSB0", "baudrate": 115200},
+    "manual": {},
+}
+
+# Ekran (projektor) cozunurlugu
 SCREEN_SIZE = (1920, 1080)
 
-# Kalibrasyon dosyasi (proje kok dizininden yukler)
-CALIBRATION_FILE = Path(__file__).parent.parent / "calibration.json"
+# Kalibrasyon dosyasi: python -m tools.calibrate ile uretilir
+CALIBRATION_FILE = Path(__file__).resolve().parent.parent / "calibration.json"
 
 
 def main():
-    cap = cv2.VideoCapture(CAMERA_URL)
-
-    if not cap.isOpened():
-        print("Kamera acilamadi. CAMERA_URL adresini kontrol et.")
+    try:
+        camera = open_camera(CAMERA_SOURCE, size=CAMERA_SIZE, fps=CAMERA_FPS, exposure_us=EXPOSURE_US)
+    except Exception as error:
+        print(f"Kamera acilamadi: {error}")
         return
 
     calibrator = HomographyCalibrator(SCREEN_SIZE)
@@ -36,41 +50,44 @@ def main():
         cursor = CursorController(calibrator)
         print("Kalibrasyon yuklendi.")
     else:
-        print("Kalibrasyon dosyasi yok. Imlec hareketi kapali.")
+        print("Kalibrasyon dosyasi yok (python -m tools.calibrate). Imlec hareketi kapali, kamera koordinati kullanilacak.")
 
+    # (kare_zamani, kamera_x, kamera_y, ekran_x, ekran_y) ; kalibrasyon yoksa ekran_x/y = None
     coordinate_history = deque(maxlen=300)
     coordinate_lock = threading.Lock()
 
-    def handle_trigger(timestamp):
+    def handle_trigger(event: TriggerEvent):
+        # Not: Bu mantik lazerin SUREKLI acik oldugunu varsayar (tetikten onceki son kare).
+        # Lazer sadece tetikte yanacaksa, tetikten SONRAKI kareler aranmali.
         with coordinate_lock:
-            candidates = [item for item in coordinate_history if item[0] <= timestamp]
+            candidates = [item for item in coordinate_history if item[0] <= event.t_recv]
 
+        shot = f"#{event.shot_id}" if event.shot_id is not None else "#?"
         if not candidates:
-            print("Tetik algilandi, ancak uygun lazer koordinati yok.")
+            print(f"Tetik {shot} algilandi, ancak uygun lazer koordinati yok.")
             return
 
-        coordinate_time, x, y = candidates[-1]
-        delay_ms = (timestamp - coordinate_time) * 1000
+        frame_time, cam_x, cam_y, scr_x, scr_y = candidates[-1]
+        age_ms = (event.t_recv - frame_time) * 1000
 
-        print(
-            f"VURUS | X: {float(x):.1f}, Y: {float(y):.1f} | "
-            f"Tetik zamani: {float(timestamp):.6f} | "
-            f"Koordinat yasi: {float(delay_ms):.1f} ms"
-        )
+        if scr_x is not None:
+            position = f"Ekran X: {scr_x:.1f}, Y: {scr_y:.1f}"
+        else:
+            position = f"Kamera X: {cam_x:.1f}, Y: {cam_y:.1f} (kalibrasyonsuz)"
 
-    trigger = TriggerController(
-        port="COM3",
-        baudrate=9600,
-        on_trigger=handle_trigger,
-    )
+        print(f"VURUS {shot} [{event.source}] | {position} | Kare yasi: {age_ms:.1f} ms")
+
+    trigger = make_trigger_source(TRIGGER_KIND, on_trigger=handle_trigger, **TRIGGER_OPTIONS[TRIGGER_KIND])
+    laser_visible = False
 
     try:
         trigger.start()
+        print(f"Tetik kaynagi: {TRIGGER_KIND}" + (" (SPACE = ates)" if TRIGGER_KIND == "manual" else ""))
 
         while True:
-            ret, frame = cap.read()
+            ok, frame, frame_time = camera.read()  # frame_time = yakalama ani, isleme oncesi
 
-            if not ret:
+            if not ok:
                 print("Kameradan goruntu alinamadi.")
                 break
 
@@ -88,8 +105,15 @@ def main():
             if centroid is not None:
                 cx, cy = centroid
 
+                # Isabet degerlendirmesi icin yumusatilmamis ekran koordinati
+                # (smoothing gecikme ekler; imlec icin iyi, vurus icin degil)
+                if calibrator.is_calibrated:
+                    sx, sy = calibrator.transform(centroid)
+                else:
+                    sx = sy = None
+
                 with coordinate_lock:
-                    coordinate_history.append((time.monotonic(), cx, cy))
+                    coordinate_history.append((frame_time, cx, cy, sx, sy))
 
                 cv2.circle(
                     frame,
@@ -112,19 +136,28 @@ def main():
                     (0, 255, 0),
                     2,
                 )
+                laser_visible = True
+
+            elif laser_visible:
+                # Lazer kayboldu: yumusatici eski konumdan "kaymasin" diye sifirla
+                if cursor is not None:
+                    cursor.reset()
+                laser_visible = False
 
             cv2.imshow("Laser Tracking", frame)
             cv2.imshow("Laser Mask", laser_mask)
 
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
                 break
+            if key == ord(" ") and TRIGGER_KIND == "manual":
+                trigger.fire()
 
     finally:
         trigger.stop()
-        cap.release()
+        camera.release()
         cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
     main()
-    
