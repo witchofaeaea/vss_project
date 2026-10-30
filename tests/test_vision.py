@@ -1,4 +1,3 @@
-"""Calistirma: python -m unittest discover -s tests -t .   (proje kokunden)"""
 import os
 import tempfile
 import unittest
@@ -16,22 +15,22 @@ def make_mask(points, shape=(480, 640), radius=3, noise=0, seed=0):
     for x, y in points:
         cv2.circle(mask, (int(x), int(y)), radius, 255, -1)
     rng = np.random.default_rng(seed)
-    for _ in range(noise):  # tek piksellik tuz gurultusu
+    for _ in range(noise):  # tek piksellik salt noise
         mask[rng.integers(0, shape[0]), rng.integers(0, shape[1])] = 255
     return mask
 
 
 def must_centroid(mask):
-    """Centroid None ise testi dusurur; aksi halde (cx, cy) dondurur (tip kontrolcusu icin Optional'i eler)."""
+    """Centroid None ise testi düşürür yoksa (cx, cy) döndürür"""
     result = extract_laser_centroid(mask)
     if result is None:
-        raise AssertionError("Centroid bulunamadi")
+        raise AssertionError("No centroid found")
     return result
 
 
 def must_h(cal):
     if cal.H is None:
-        raise AssertionError("Kalibrasyon yapilmamis")
+        raise AssertionError("Calibration hasn't been done")
     return cal.H
 
 
@@ -63,7 +62,7 @@ class TestBlobDetector(unittest.TestCase):
 class TestHomography(unittest.TestCase):
     def setUp(self):
         self.screen = (1920, 1080)
-        # Kamera ekrani yamuk bir dortgen olarak goruyor
+        # Kamera ekranı yamuk bir dörtgen olarak görüyor
         self.cam_corners = [(80, 60), (560, 40), (600, 430), (50, 450)]
         self.scr_corners = [(0, 0), (1919, 0), (1919, 1079), (0, 1079)]
 
@@ -78,7 +77,7 @@ class TestHomography(unittest.TestCase):
     def test_nine_points_with_noise_and_collect(self):
         cal0 = HomographyCalibrator(self.screen)
         cal0.calibrate(self.cam_corners, self.scr_corners)
-        inv = np.linalg.inv(must_h(cal0))  # ekran->kamera ile sahte "gercek" kamera olustur
+        inv = np.linalg.inv(must_h(cal0))  # sahte "gerçek" kamera oluştur
 
         def scr_to_cam(p):
             v = inv @ np.array([p[0], p[1], 1.0])
@@ -118,7 +117,7 @@ class TestHomography(unittest.TestCase):
             cal2.load(p)
         a, b = cal.transform((300, 250)), cal2.transform((300, 250))
         self.assertAlmostEqual(a[0], b[0], places=3)
-        x, y = cal.transform((5000, -3000))  # ekran disi -> kenara kenetlenir
+        x, y = cal.transform((5000, -3000))
         self.assertTrue(0 <= x <= 1919 and 0 <= y <= 1079)
 
 

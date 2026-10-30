@@ -13,7 +13,7 @@ FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 
 try:
-    print("Test başladı. Çıkmak için Ctrl+C.")
+    print("Test started. Press Ctrl+C to exit.")
 
     while True:
         x = float((time.time() * 100) % FRAME_WIDTH)
@@ -25,4 +25,4 @@ try:
         time.sleep(0.01)
 
 except KeyboardInterrupt:
-    print("Test sonlandırıldı.")
+    print("Test finished.")

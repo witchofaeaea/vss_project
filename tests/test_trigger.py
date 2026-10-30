@@ -1,4 +1,3 @@
-"""Tetik kaynaklari testleri. Calistirma: python -m unittest tests.test_trigger (proje kokunden)"""
 import socket
 import threading
 import time
@@ -41,7 +40,7 @@ class TestFiltering(unittest.TestCase):
 
     def test_debounce(self):
         self.src._on_raw("SHOT,1,0", t_recv=1.00)
-        self.src._on_raw("SHOT,2,0", t_recv=1.05)  # 50 ms sonra -> elenir
+        self.src._on_raw("SHOT,2,0", t_recv=1.05)  # 50 ms sonra elenir
         self.src._on_raw("SHOT,3,0", t_recv=1.20)
         self.assertEqual([e.shot_id for e in self.events], [1, 3])
         self.assertEqual(self.src.stats["debounced"], 1)
@@ -75,7 +74,7 @@ class TestManual(unittest.TestCase):
 
 
 class TestUdpLoopback(unittest.TestCase):
-    """Gercek UDP soketi ile: ESP32'yi taklit eden bir gonderici."""
+    """Gerçek UDP soketi ile ESP32'yi taklit eden bir gönderici."""
 
     def test_receives_and_dedups(self):
         got = []
@@ -90,11 +89,11 @@ class TestUdpLoopback(unittest.TestCase):
         src.start()
         try:
             sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            for packet in (b"SHOT,1,10", b"SHOT,1,10", b"SHOT,1,10", b"SHOT,2,500"):  # her atis 3 kez
+            for packet in (b"SHOT,1,10", b"SHOT,1,10", b"SHOT,1,10", b"SHOT,2,500"):  # her atış 3 kez
                 sender.sendto(packet, ("127.0.0.1", src.port))
                 time.sleep(0.005)
             sender.close()
-            self.assertTrue(done.wait(2.0), "UDP paketleri alinamadi")
+            self.assertTrue(done.wait(2.0), "UDP packets were not received")
             time.sleep(0.05)
         finally:
             src.stop()

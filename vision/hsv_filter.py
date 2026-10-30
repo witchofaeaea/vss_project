@@ -1,4 +1,4 @@
-"""HSV renk filtreleme modulu: Kirmizi lazer tespiti icin renk maskesi olusturur."""
+"""HSV renk filtreleme modülü: Kırmızı lazer tespiti için renk maskesi oluşturur."""
 
 from typing import Tuple
 import cv2

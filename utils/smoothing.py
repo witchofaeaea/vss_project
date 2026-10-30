@@ -1,4 +1,4 @@
-"""Koordinat yumusatma: imlec titremesini azaltir."""
+"""Koordinat yumuşatma: imleç titremesini azaltır."""
 import math
 from typing import Optional, Tuple
 
@@ -6,7 +6,7 @@ Point = Tuple[float, float]
 
 
 class ExponentialSmoother:
-    """Basit EMA. alpha kucuk = daha yumusak ama daha gecikmeli."""
+    """Basit EMA alpha küçük = daha yumuşak ama daha gecikmeli."""
 
     def __init__(self, alpha: float = 0.4):
         self.alpha = alpha
@@ -39,11 +39,9 @@ class _LowPass:
 
 
 class OneEuroFilter:
-    """One Euro Filter: durağanken guclu yumusatir, hizli harekette gecikmeyi azaltir.
-
-    min_cutoff: dusuk = durgunken daha az titreme.
-    beta: yuksek = hizli harekette daha az gecikme.
-    """
+    """One Euro Filter: durağanken güçlü yumuşatır, hızlı harekette gecikmeyi azaltır.
+    min_cutoff: düşük = durgunken daha az titreme.
+    beta: yüksek = hızlı harekette daha az gecikme."""
 
     def __init__(self, freq: float = 60.0, min_cutoff: float = 1.0, beta: float = 0.02, d_cutoff: float = 1.0):
         self.freq = freq
@@ -72,7 +70,7 @@ class OneEuroFilter:
 
 
 class PointSmoother:
-    """(x, y) icin iki One Euro filtresi. Lazer kaybolursa reset() cagir."""
+    """(x,y) için iki One Euro filtresi. Lazer kaybolursa reset() çağır"""
 
     def __init__(self, freq: float = 60.0, min_cutoff: float = 1.0, beta: float = 0.02):
         self._fx = OneEuroFilter(freq, min_cutoff, beta)
