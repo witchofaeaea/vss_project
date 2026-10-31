@@ -59,14 +59,14 @@ class TestFiltering(unittest.TestCase):
 class TestManual(unittest.TestCase):
     def test_fire_increments_id(self):
         events = []
-        src = make_trigger_source("manual", on_trigger=events.append)
+        src = ManualTriggerSource(on_trigger=events.append)
         src.start()
         src.fire()
         src.fire()
         src.stop()
         self.assertEqual([e.shot_id for e in events], [0, 1])
         self.assertTrue(all(e.source == "manual" for e in events))
-        self.assertIsInstance(src, ManualTriggerSource)
+        self.assertIsInstance(make_trigger_source("manual"), ManualTriggerSource)
 
     def test_unknown_kind(self):
         with self.assertRaises(ValueError):

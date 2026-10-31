@@ -76,8 +76,9 @@ class TriggerSource:
     def start(self) -> None:
         self._open()
         self.running = True
-        self._thread = threading.Thread(target=self._read_loop, daemon=True)
-        self._thread.start()
+        thread = threading.Thread(target=self._read_loop, daemon=True)
+        thread.start()
+        self._thread = thread
 
     def stop(self) -> None:
         self.running = False
@@ -128,12 +129,13 @@ class UdpTriggerSource(TriggerSource):
         self.last_sender: Optional[Tuple[str, int]] = None
 
     def _open(self) -> None:
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind((self.host, self.port))
-        self.sock.settimeout(0.1)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((self.host, self.port))
+        sock.settimeout(0.1)
         # Gerçek port (port=0 verilirse işletim sistemi seçer; testlerde kullanışlı)
-        self.port = self.sock.getsockname()[1]
+        self.port = sock.getsockname()[1]
+        self.sock = sock
 
     def _read_loop(self) -> None:
         while self.running and self.sock is not None:
@@ -167,9 +169,10 @@ class SerialTriggerSource(TriggerSource):
     def _open(self) -> None:
         import serial  # pyserial sadece bu kaynak kullanılırsa gerekir
 
-        self.connection = serial.Serial(self.port, self.baudrate, timeout=0.1)
+        connection = serial.Serial(self.port, self.baudrate, timeout=0.1)
         time.sleep(2)  # ESP32 seri port açılınca reset atar açılışı bekle
-        self.connection.reset_input_buffer()
+        connection.reset_input_buffer()
+        self.connection = connection
 
     def _read_loop(self) -> None:
         import serial

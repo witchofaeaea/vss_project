@@ -29,8 +29,7 @@ def extract_laser_centroid(
     open_iter: int = 1,
     close_iter: int = 1,
 ) -> Optional[Tuple[float, float]]:
-    """Binary mask içinden lazer noktasinin (cx, cy) kutle merkezini dondurur.
-
+    """Binary mask içinden lazer noktasının (cx, cy) kütle merkezini döndürür.
     Alan aralığına uyan bloblardan en büyüğünü seç. Uygun blob yoksa None döndür.
     connectedComponentsWithStats sayesinde 1-2 pikselik blobların alanı
     (cv2.contourArea'nin aksine) 0 çıkmaz"""

@@ -7,7 +7,7 @@ import cv2
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from network.trigger_source import TriggerEvent, make_trigger_source
+from network.trigger_source import ManualTriggerSource, TriggerEvent, make_trigger_source
 from vision.blob_detector import extract_laser_centroid
 from vision.calibration import HomographyCalibrator
 from vision.camera import open_camera
@@ -64,8 +64,8 @@ def main():
             print(f"Trigger {shot} detected, but no matching laser coordinate.")
             return
 
-        frame_time, cam_x, cam_y, scr_x, scr_y = candidates[-1]
-        age_ms = (event.t_recv - frame_time) * 1000
+        coord_time, cam_x, cam_y, scr_x, scr_y = candidates[-1]
+        age_ms = (event.t_recv - coord_time) * 1000
 
         if scr_x is not None:
             position = f"Screen X: {scr_x:.1f}, Y: {scr_y:.1f}"
@@ -84,7 +84,7 @@ def main():
         while True:
             ok, frame, frame_time = camera.read()  # frame_time = yakalama anı, işleme öncesi
 
-            if not ok:
+            if not ok or frame is None:
                 print("Failed to read frame from camera.")
                 break
 
@@ -145,7 +145,7 @@ def main():
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
-            if key == ord(" ") and TRIGGER_KIND == "manual":
+            if key == ord(" ") and isinstance(trigger, ManualTriggerSource):
                 trigger.fire()
 
     finally:
