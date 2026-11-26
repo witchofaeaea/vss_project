@@ -1,6 +1,5 @@
 """HSV renk filtreleme modülü: Kırmızı lazer tespiti için renk maskesi oluşturur."""
 
-from typing import Tuple
 import cv2
 import numpy as np
 

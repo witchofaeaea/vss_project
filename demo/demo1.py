@@ -1,14 +1,13 @@
 import sys
-import threading
-from typing import Optional
-from collections import deque
 from pathlib import Path
+from typing import Optional
 
 import cv2
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from network.trigger_source import ManualTriggerSource, TriggerEvent, make_trigger_source
+from backend import SessionLogger, Shot, ShotService
+from network.trigger_source import ManualTriggerSource
 from vision.blob_detector import extract_laser_centroid
 from vision.calibration import HomographyCalibrator
 from vision.camera import open_camera
@@ -32,6 +31,24 @@ SCREEN_SIZE = (1920, 1080)
 
 # Kalibrasyon dosyası
 CALIBRATION_FILE = Path(__file__).resolve().parent.parent / "calibration.json"
+SESSION_DIR = Path(__file__).resolve().parent.parent / "sessions"
+
+
+def print_shot(shot: Shot, result) -> None:
+    """Called by ShotService for every shot (from the trigger thread)."""
+    label = f"#{shot.shot_id}" if shot.shot_id is not None else "#?"
+    if not shot.has_position:
+        print(f"SHOT {label} [{shot.source}] | laser not visible")
+        return
+    s = shot.sample
+    if shot.screen_pos is not None:
+        position = f"Screen X: {s.scr_x:.1f}, Y: {s.scr_y:.1f}"
+    elif s.scr_x is not None:
+        position = f"Off screen ({s.scr_x:.0f}, {s.scr_y:.0f})"
+    else:
+        position = f"Camera X: {s.cam_x:.1f}, Y: {s.cam_y:.1f} (uncalibrated)"
+    delay = f" | Net +{shot.network_delay_ms:.1f} ms" if shot.network_delay_ms is not None else ""
+    print(f"SHOT {label} [{shot.source}] | {position} | Frame age: {shot.frame_age_ms:.1f} ms{delay}")
 
 
 def main():
@@ -51,34 +68,17 @@ def main():
     else:
         print("No calibration file. Cursor movement disabled, using camera coordinates.")
 
-    # (kare_zamani, kamera_x, kamera_y, ekran_x, ekran_y) ; kalibrasyon yoksa ekran_x/y = None
-    coordinate_history = deque(maxlen=300)
-    coordinate_lock = threading.Lock()
-
-    def handle_trigger(event: TriggerEvent):
-        with coordinate_lock:
-            candidates = [item for item in coordinate_history if item[0] <= event.t_recv]
-
-        shot = f"#{event.shot_id}" if event.shot_id is not None else "#?"
-        if not candidates:
-            print(f"Trigger {shot} detected, but no matching laser coordinate.")
-            return
-
-        coord_time, cam_x, cam_y, scr_x, scr_y = candidates[-1]
-        age_ms = (event.t_recv - coord_time) * 1000
-
-        if scr_x is not None:
-            position = f"Screen X: {scr_x:.1f}, Y: {scr_y:.1f}"
-        else:
-            position = f"Camera X: {cam_x:.1f}, Y: {cam_y:.1f} (uncalibrated)"
-
-        print(f"SHOT {shot} [{event.source}] | {position} | Frame age: {age_ms:.1f} ms")
-
-    trigger = make_trigger_source(TRIGGER_KIND, on_trigger=handle_trigger, **TRIGGER_OPTIONS[TRIGGER_KIND])
+    # Backend: trigger <-> laser matching + session log (sessions/ folder)
+    service = ShotService.create(
+        TRIGGER_KIND,
+        TRIGGER_OPTIONS[TRIGGER_KIND],
+        logger=SessionLogger(SESSION_DIR),
+        on_shot=print_shot,
+    )
     laser_visible = False
 
     try:
-        trigger.start()
+        service.start()
         print(f"Trigger source: {TRIGGER_KIND}" + (" (SPACE = fire)" if TRIGGER_KIND == "manual" else ""))
 
         while True:
@@ -102,14 +102,13 @@ def main():
             if centroid is not None:
                 cx, cy = centroid
 
-                # (smoothing gecikme ekler; imleç için iyi, vuruş için değil)
+                # Unsmoothed + unclamped for hit evaluation (smoothing is only for the cursor)
                 if calibrator.is_calibrated:
-                    sx, sy = calibrator.transform(centroid)
+                    sx, sy = calibrator.transform(centroid, clamp=False)
+                    on_screen = 0 <= sx < calibrator.screen_w and 0 <= sy < calibrator.screen_h
+                    service.add_laser(frame_time, centroid, (sx, sy), on_screen)
                 else:
-                    sx = sy = None
-
-                with coordinate_lock:
-                    coordinate_history.append((frame_time, cx, cy, sx, sy))
+                    service.add_laser(frame_time, centroid)
 
                 cv2.circle(
                     frame,
@@ -145,11 +144,14 @@ def main():
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
-            if key == ord(" ") and isinstance(trigger, ManualTriggerSource):
-                trigger.fire()
+            if key == ord(" ") and isinstance(service.trigger, ManualTriggerSource):
+                service.trigger.fire()
 
     finally:
-        trigger.stop()
+        summary = service.stop()
+        if summary is not None:
+            print(f"Session: {summary['shots']} shots, {summary['no_position']} without laser. "
+                  f"Log: {service.logger.csv_path}")
         camera.release()
         cv2.destroyAllWindows()
 
