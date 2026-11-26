@@ -1,19 +1,19 @@
-"""Kalibrasyon araci: projektor ekraninda hedefler gosterir, lazer konumlarini toplar,
-homography'yi hesaplayip calibration.json'a kaydeder, sonra canli dogrulama yapar.
+"""Calibration tool: shows targets on the projector, collects laser positions,
+computes the homography, saves it to calibration.json, then runs a live verification.
 
-Proje kokunden calistir:
+Run from the project root:
     python -m tools.calibrate --camera picamera --screen 1920x1080
-    python -m tools.calibrate --camera 0 --screen 1280x720 --display-x 1920   # ikinci monitor
+    python -m tools.calibrate --camera 0 --screen 1280x720 --display-x 1920   # second monitor
 
-Akis:
-  1. Projektorde siyah ekran uzerinde bir arti (+) hedef belirir.
-  2. Lazeri hedefin ortasina tut, SPACE'e bas. Arac ~15 kare okuyup medyanini alir.
-  3. Tum hedefler bitince hata (piksel) yazilir ve dosya kaydedilir.
-  4. Dogrulama: lazerin nereye eslendigi projektorde yesil daire ile gosterilir.
-     Daire lazer noktasinin ustundeyse kalibrasyon iyi. Q ile cik.
-ESC her an iptal eder.
+Flow:
+  1. A cross (+) target appears on a black screen on the projector.
+  2. Aim the laser at the center of the target and press SPACE. The tool reads ~15 frames and takes the median.
+  3. After all targets, the error (in pixels) is printed and the file is saved.
+  4. Verification: the mapped laser position is shown as a green circle on the projector.
+     If the circle is on the laser spot, the calibration is good. Press Q to quit.
+ESC cancels at any time.
 
-Ipucu: Lazeri elde degil bir yere sabitleyerek tutmak (tripod, kitap yigini) hatayi ciddi azaltir.
+Tip: holding the laser fixed (tripod, stack of books) instead of by hand reduces the error a lot.
 """
 import argparse
 from pathlib import Path
@@ -63,7 +63,7 @@ class CalibrationUI:
             cv2.namedWindow(PREVIEW_WIN, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(PREVIEW_WIN, 640, 360)
 
-    # --- cizim ---
+    # --- drawing ---
     def blank(self) -> np.ndarray:
         return np.zeros((self.screen_h, self.screen_w, 3), np.uint8)
 
@@ -92,34 +92,34 @@ class CalibrationUI:
             raise Aborted()
         return key
 
-    # --- collect_calibration_points icin callback'ler ---
+    # --- callbacks for collect_calibration_points ---
     def show_target(self, target: Point) -> None:
-        """Hedefi gosterir ve kullanici SPACE'e basana kadar bekler (canli onizleme ile)."""
+        """Shows the target and waits until the user presses SPACE (with live preview)."""
         self.index += 1
-        status = f"Hedef {self.index}/{self.total}: lazeri artinin ortasina tut, SPACE"
+        status = f"Target {self.index}/{self.total}: aim at the center of the cross, press SPACE"
         self.draw_target(target, status)
         while True:
             ok, frame, _ = self.camera.read()
             if not ok:
-                raise RuntimeError("Kameradan goruntu alinamadi")
+                raise RuntimeError("Could not read frame from camera")
             c = detect_laser(frame)
-            self.show_preview(frame, c, "Lazer: " + ("VAR" if c else "YOK"))
+            self.show_preview(frame, c, "Laser: " + ("FOUND" if c else "NOT FOUND"))
             if self.poll_key() == ord(" "):
                 break
-        self.draw_target(target, f"Hedef {self.index}/{self.total}: olculuyor, lazeri sabit tut...")
+        self.draw_target(target, f"Target {self.index}/{self.total}: measuring, hold the laser still...")
 
     def read_centroid(self) -> Optional[Point]:
         ok, frame, _ = self.camera.read()
         if not ok:
             return None
-        self.poll_key()  # pencereleri canli tutar, ESC'yi yakalar
+        self.poll_key()  # keeps the windows responsive and catches ESC
         c = detect_laser(frame)
-        self.show_preview(frame, c, "Olculuyor")
+        self.show_preview(frame, c, "Measuring")
         return c
 
-    # --- dogrulama ---
+    # --- verification ---
     def verify(self, calibrator: HomographyCalibrator) -> None:
-        """Lazerin eslendigi noktayi projektorde gosterir. Q ile cikar."""
+        """Shows the mapped laser position on the projector. Press Q to quit."""
         while True:
             ok, frame, _ = self.camera.read()
             if not ok:
@@ -129,28 +129,28 @@ class CalibrationUI:
             if c is not None:
                 sx, sy = calibrator.transform(c)
                 cv2.circle(canvas, (int(round(sx)), int(round(sy))), 25, (0, 255, 0), 3)
-            cv2.putText(canvas, "Dogrulama: yesil daire lazerin ustunde olmali. Q = cikis",
+            cv2.putText(canvas, "Verify: the green circle should be on the laser. Q = quit",
                         (30, self.screen_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (180, 180, 180), 2)
             cv2.imshow(PROJECTOR_WIN, canvas)
-            self.show_preview(frame, c, "Dogrulama")
+            self.show_preview(frame, c, "Verify")
             key = cv2.waitKey(1) & 0xFF
             if key in (ord("q"), 27):
                 break
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="VSS homography kalibrasyonu")
-    ap.add_argument("--camera", default="picamera", help='"picamera", kamera indeksi (0) veya URL')
+    ap = argparse.ArgumentParser(description="VSS homography calibration")
+    ap.add_argument("--camera", default="picamera", help='"picamera", camera index (0) or URL')
     ap.add_argument("--cam-size", default="1280x720", type=parse_size)
     ap.add_argument("--fps", default=120.0, type=float)
-    ap.add_argument("--exposure-us", default=None, type=int, help="Sabit pozlama (Pi kamerasi). Orn. 2000")
-    ap.add_argument("--screen", default="1920x1080", type=parse_size, help="Projektor cozunurlugu")
-    ap.add_argument("--display-x", default=0, type=int, help="Projektor penceresinin x konumu (ikinci ekran icin)")
-    ap.add_argument("--grid", default=3, type=int, help="grid x grid hedef (3 -> 9 nokta)")
-    ap.add_argument("--margin", default=0.1, type=float, help="Hedeflerin kenardan uzakligi (oran)")
-    ap.add_argument("--samples", default=15, type=int, help="Hedef basina olcum sayisi")
+    ap.add_argument("--exposure-us", default=None, type=int, help="Fixed exposure in microseconds (Pi camera only), e.g. 2000")
+    ap.add_argument("--screen", default="1920x1080", type=parse_size, help="Projector resolution")
+    ap.add_argument("--display-x", default=0, type=int, help="x position of the projector window (for a second screen)")
+    ap.add_argument("--grid", default=3, type=int, help="grid x grid targets (3 -> 9 points)")
+    ap.add_argument("--margin", default=0.1, type=float, help="Target distance from the screen edge (ratio)")
+    ap.add_argument("--samples", default=15, type=int, help="Measurements per target")
     ap.add_argument("--out", default=str(DEFAULT_OUT))
-    ap.add_argument("--no-preview", action="store_true", help="Kamera onizleme penceresini acma")
+    ap.add_argument("--no-preview", action="store_true", help="Do not open the camera preview window")
     ap.add_argument("--no-verify", action="store_true")
     args = ap.parse_args()
 
@@ -165,24 +165,24 @@ def main() -> int:
         )
         skipped = len(targets) - len(cam_pts)
         if skipped:
-            print(f"Uyari: {skipped} hedefte lazer yeterince gorulmedi, atlandi.")
+            print(f"Warning: laser not seen enough at {skipped} target(s), skipped.")
         if len(cam_pts) < 4:
-            print(f"Yetersiz nokta ({len(cam_pts)}). En az 4 gerekli. Lazer tespitini kontrol et.")
+            print(f"Not enough points ({len(cam_pts)}). At least 4 needed. Check laser detection.")
             return 1
 
         calibrator = HomographyCalibrator(args.screen)
         error = calibrator.calibrate(cam_pts, scr_pts, ransac=len(cam_pts) >= 6)
         calibrator.save(args.out)
-        print(f"Kalibrasyon kaydedildi: {args.out}")
-        print(f"{len(cam_pts)} nokta, ortalama hata: {error:.1f} px")
+        print(f"Calibration saved: {args.out}")
+        print(f"{len(cam_pts)} points, mean error: {error:.1f} px")
         if error > 15:
-            print("Hata yuksek. Kamerayi/lazeri sabitleyip tekrar dene.")
+            print("Error is high. Fix the camera/laser in place and try again.")
 
         if not args.no_verify:
             ui.verify(calibrator)
         return 0
     except Aborted:
-        print("Iptal edildi.")
+        print("Cancelled.")
         return 1
     finally:
         camera.release()
