@@ -36,7 +36,6 @@ class CursorController:
         smooth_x, smooth_y = self.smoother.update((screen_x, screen_y))
 
         # 3. İmleci hareket ettir
-        # 3. İmleci hareket ettir
         # (0,0) köşesine değerse pyautogui FAILSAFE programı durdurur, 1 px içeride tut
         screen_w, screen_h = pyautogui.size()
         target_x = min(max(round(smooth_x), 1), screen_w - 2)

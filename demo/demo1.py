@@ -1,5 +1,6 @@
 import sys
 import threading
+from typing import Optional
 from collections import deque
 from pathlib import Path
 
@@ -13,7 +14,6 @@ from vision.calibration import HomographyCalibrator
 from vision.camera import open_camera
 from vision.cursor_controller import CursorController
 from vision.hsv_filter import create_red_laser_mask
-from typing import Optional
 
 # Kamera: "picamera" (Raspberry Pi CSI kamera), 0 (USB webcam) veya stream URL / video dosyası
 CAMERA_SOURCE = "0"  # TODO: pi kamerasına geçince picamera yapılacak

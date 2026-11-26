@@ -26,8 +26,8 @@ coordinates, and matches it with trigger events from the gun. Joint project: Com
 ## Open work
 
 - Backend: move trigger↔coordinate sync out of `demo/demo1.py`, add session/score logging.
-- `tools/calibrate.py` (projector targets → `calibration.json`, live verify) exists only on Hatice's laptop;
-  push it when hardware testing starts.
+- `tools/calibrate.py` (projector targets → `calibration.json`, live verify) is in the repo; run it on real hardware to 
+ measure calibration error
 - Real-hardware tests: calibration error, exposure tuning (`exposure_us`, ~2000 to start), end-to-end
   latency vs <100 ms target (use `esp_millis`).
 - `cursor_controller.py`: `pyautogui.FAILSAFE = True` + clamping to (0,0) can stop the program when the
