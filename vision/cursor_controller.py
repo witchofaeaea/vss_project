@@ -1,6 +1,6 @@
 """Kalibre edilmis lazer koordinatlarini fare imlecine aktarir."""
 
-from typing import Optional, Tuple
+from typing import Tuple
 import pyautogui
 
 from utils.smoothing import PointSmoother
@@ -13,7 +13,7 @@ class CursorController:
     def __init__(
         self,
         calibrator: HomographyCalibrator,
-        freq: float = 60.0,
+        freq: float = 120.0,
         min_cutoff: float = 1.0,
         beta: float = 0.02,
     ):
@@ -36,11 +36,13 @@ class CursorController:
         smooth_x, smooth_y = self.smoother.update((screen_x, screen_y))
 
         # 3. İmleci hareket ettir
-        pyautogui.moveTo(
-            round(smooth_x),
-            round(smooth_y),
-            duration=0,
-        )
+        # 3. İmleci hareket ettir
+        # (0,0) köşesine değerse pyautogui FAILSAFE programı durdurur, 1 px içeride tut
+        screen_w, screen_h = pyautogui.size()
+        target_x = min(max(round(smooth_x), 1), screen_w - 2)
+        target_y = min(max(round(smooth_y), 1), screen_h - 2)
+
+        pyautogui.moveTo(target_x, target_y, duration=0)
 
     def reset(self) -> None:
         """Lazer kayboldugunda veya yeniden algilandiginda yumusatma gecmisini sifirlar."""

@@ -13,12 +13,13 @@ from vision.calibration import HomographyCalibrator
 from vision.camera import open_camera
 from vision.cursor_controller import CursorController
 from vision.hsv_filter import create_red_laser_mask
+from typing import Optional
 
 # Kamera: "picamera" (Raspberry Pi CSI kamera), 0 (USB webcam) veya stream URL / video dosyası
 CAMERA_SOURCE = "0"  # TODO: pi kamerasına geçince picamera yapılacak
 CAMERA_SIZE = (1280, 720)
 CAMERA_FPS = 120
-EXPOSURE_US = None  # düşük pozlama lazer tespitini kolaylaştırır (sadece Pi kamerasi)
+EXPOSURE_US = 2000  # düşük pozlama lazer tespitini kolaylaştırır (sadece Pi kamerasi)
 
 TRIGGER_KIND = "manual"
 TRIGGER_OPTIONS = {
@@ -41,11 +42,11 @@ def main():
         return
 
     calibrator = HomographyCalibrator(SCREEN_SIZE)
-    cursor = None
+    cursor: Optional[CursorController] = None
 
     if CALIBRATION_FILE.exists():
         calibrator.load(str(CALIBRATION_FILE))
-        cursor = CursorController(calibrator)
+        CursorController(calibrator, freq=CAMERA_FPS)
         print("Calibration loaded.")
     else:
         print("No calibration file. Cursor movement disabled, using camera coordinates.")

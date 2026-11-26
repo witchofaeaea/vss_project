@@ -43,7 +43,7 @@ class OneEuroFilter:
     min_cutoff: düşük = durgunken daha az titreme.
     beta: yüksek = hızlı harekette daha az gecikme."""
 
-    def __init__(self, freq: float = 60.0, min_cutoff: float = 1.0, beta: float = 0.02, d_cutoff: float = 1.0):
+    def __init__(self, freq: float = 120.0, min_cutoff: float = 1.0, beta: float = 0.02, d_cutoff: float = 1.0):
         self.freq = freq
         self.min_cutoff = min_cutoff
         self.beta = beta
@@ -72,7 +72,7 @@ class OneEuroFilter:
 class PointSmoother:
     """(x,y) için iki One Euro filtresi. Lazer kaybolursa reset() çağır"""
 
-    def __init__(self, freq: float = 60.0, min_cutoff: float = 1.0, beta: float = 0.02):
+    def __init__(self, freq: float = 120.0, min_cutoff: float = 1.0, beta: float = 0.02):
         self._fx = OneEuroFilter(freq, min_cutoff, beta)
         self._fy = OneEuroFilter(freq, min_cutoff, beta)
 
