@@ -46,7 +46,7 @@ def main():
 
     if CALIBRATION_FILE.exists():
         calibrator.load(str(CALIBRATION_FILE))
-        CursorController(calibrator, freq=CAMERA_FPS)
+        cursor = CursorController(calibrator, freq=CAMERA_FPS)
         print("Calibration loaded.")
     else:
         print("No calibration file. Cursor movement disabled, using camera coordinates.")
