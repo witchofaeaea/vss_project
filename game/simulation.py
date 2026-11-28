@@ -48,7 +48,6 @@ class GameSimulation:
 
             target_id = str(hit_target.target_id)
             self.reserved_target_ids.add(target_id)
-
             self.pending_results[shot.shot_id] = hit_target
 
             return HitResult(
@@ -88,11 +87,9 @@ class GameSimulation:
             self.target_manager.remove_target(target)
             self.reserved_target_ids.discard(str(target.target_id))
 
-            # Her isabette hedef sayısını koru.
             self.target_manager.spawn_target()
-
-            # Her 3 isabette zorluk seviyesini artır.
             self.target_manager.register_hit()
+
             if self.target_manager.total_hits % 3 == 0:
                 self.target_manager.increase_all_speeds()
 
